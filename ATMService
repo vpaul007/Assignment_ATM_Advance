@@ -1,0 +1,109 @@
+public class ATMService {
+    private final Map<String, Card> cards;
+    private final Map<String, Account> accounts;
+    private final List<Transaction> transactions;
+    private final ExecutorService auditExecutor;
+    
+    // Predicates
+    private final Predicate<Card> isValidCard = card -> 
+        card.isActive() && card.expiryDate().isAfter(LocalDate.now());
+    
+    private final Predicate<Account> hasSufficientBalance = account -> 
+        account.balance().compareTo(BigDecimal.ZERO) > 0;
+    
+    // Suppliers
+    private final Supplier<String> transactionIdSupplier = () -> 
+        "TXN" + Instant.now().toEpochMilli() + ThreadLocalRandom.current().nextInt(1000, 9999);
+    
+    private final Supplier<LocalDateTime> currentTimeSupplier = LocalDateTime::now;
+    
+    // Consumers
+    private final Consumer<Transaction> auditTransaction = transaction -> 
+        auditExecutor.submit(() -> saveTransactionToAuditLog(transaction));
+    
+    public Optional<Account> processOperation(ATMOperation operation) {
+        return Optional.ofNullable(cards.get(operation.cardNumber()))
+            .filter(card -> verifyPin(card, operation.pin()))
+            .filter(isValidCard)
+            .map(Card::accountNumber)
+            .map(accounts::get)
+            .flatMap(account -> {
+                switch (operation) {
+                    case Withdrawal w -> processWithdrawal(account, w);
+                    case BalanceInquiry b -> processBalanceInquiry(account, b);
+                    case PinChange p -> processPinChange(p);
+                    case Transfer t -> processTransfer(account, t);
+                    case Deposit d -> processDeposit(account, d);
+                    default -> throw new IllegalStateException("Unknown operation");
+                }
+                return account;
+            });
+    }
+    
+    private void processWithdrawal(Account account, Withdrawal withdrawal) {
+        if (account.balance().compareTo(withdrawal.amount()) >= 0 
+            && account.withdrawalLimit().compareTo(withdrawal.amount()) >= 0) {
+            
+            BigDecimal newBalance = account.balance().subtract(withdrawal.amount());
+            accounts.put(account.accountNumber(), 
+                new Account(account.accountNumber(), account.customerId(), account.type(), 
+                    newBalance, account.withdrawalLimit()));
+            
+            Transaction txn = new Transaction(
+                transactionIdSupplier.get(),
+                account.accountNumber(),
+                TransactionType.WITHDRAWAL,
+                withdrawal.amount(),
+                currentTimeSupplier.get(),
+                withdrawal.location()
+            );
+            transactions.add(txn);
+            auditTransaction.accept(txn);
+        } else {
+            throw new InsufficientFundsException("Insufficient funds or exceeds limit");
+        }
+    }
+    
+    // Other operation methods...
+    
+    public List<Transaction> getRecentTransactions(String accountNumber, int count) {
+        return transactions.stream()
+            .filter(t -> t.accountNumber().equals(accountNumber))
+            .sorted(Comparator.comparing(Transaction::timestamp).reversed())
+            .limit(count)
+            .collect(Collectors.toList());
+    }
+    
+    public Map<TransactionType, Long> getTransactionCountsByType() {
+        return transactions.stream()
+            .collect(Collectors.groupingBy(
+                Transaction::type,
+                Collectors.counting()
+            ));
+    }
+    
+    public Map<Boolean, List<Transaction>> partitionTransactionsByAmount(BigDecimal threshold) {
+        return transactions.stream()
+            .collect(Collectors.partitioningBy(
+                t -> t.amount().compareTo(threshold) > 0
+            ));
+    }
+    
+    public Optional<Transaction> findLargestWithdrawal(String accountNumber) {
+        return transactions.stream()
+            .filter(t -> t.accountNumber().equals(accountNumber))
+            .filter(t -> t.type() == TransactionType.WITHDRAWAL)
+            .max(Comparator.comparing(Transaction::amount));
+    }
+    
+    public boolean hasAnyFailedAttempts(String cardNumber) {
+        return transactions.stream()
+            .anyMatch(t -> t.accountNumber().equals(getAccountNumberForCard(cardNumber))
+                && t.type() == TransactionType.WITHDRAWAL
+                && t.amount().compareTo(BigDecimal.ZERO) < 0);
+    }
+    
+    private void saveTransactionToAuditLog(Transaction transaction) {
+        // Implementation for saving to audit log
+    }
+}

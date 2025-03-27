@@ -1,0 +1,46 @@
+public class ATMSimulation {
+    private final ATMService atmService;
+    private final ATMInterface atmInterface;
+    private final ATMLocation currentLocation;
+    
+    public ATMSimulation(Locale locale, ATMService atmService, ATMLocation location) {
+        this.atmService = atmService;
+        this.atmInterface = new ATMInterface(locale, atmService);
+        this.currentLocation = location;
+    }
+    
+    public void startSession(String cardNumber) {
+        atmInterface.displayWelcome();
+        
+        // Simulate PIN entry (in real app, this would be secure input)
+        String pin = "1234"; // Normally would be encrypted/hashed
+        
+        while (true) {
+            System.out.println("\n" + atmInterface.getMessages().getString("menuOptions"));
+            System.out.println("1. " + atmInterface.getMessages().getString("balanceInquiry"));
+            System.out.println("2. " + atmInterface.getMessages().getString("withdrawal"));
+            System.out.println("3. " + atmInterface.getMessages().getString("deposit"));
+            System.out.println("4. " + atmInterface.getMessages().getString("exit"));
+            
+            String choice = System.console().readLine();
+            
+            switch (choice) {
+                case "1" -> atmInterface.displayBalance(cardNumber, pin, currentLocation);
+                case "2" -> {
+                    BigDecimal amount = new BigDecimal("100"); // Simplified
+                    atmInterface.processWithdrawal(cardNumber, pin, amount, currentLocation);
+                }
+                case "3" -> {
+                    BigDecimal amount = new BigDecimal("50"); // Simplified
+                    atmService.processOperation(new Deposit(cardNumber, pin, amount, currentLocation, LocalDateTime.now()));
+                    System.out.println(atmInterface.getMessages().getString("depositSuccess"));
+                }
+                case "4" -> {
+                    System.out.println(atmInterface.getMessages().getString("thankYou"));
+                    return;
+                }
+                default -> System.out.println(atmInterface.getMessages().getString("invalidChoice"));
+            }
+        }
+    }
+}

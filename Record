@@ -1,0 +1,16 @@
+public record Card(String cardNumber, String pinHash, String accountNumber, 
+                  LocalDate expiryDate, boolean isActive) {}
+
+public record Account(String accountNumber, String customerId, AccountType type, 
+                     BigDecimal balance, BigDecimal withdrawalLimit) {}
+
+public record Transaction(String transactionId, String accountNumber, 
+                         TransactionType type, BigDecimal amount, 
+                         LocalDateTime timestamp, ATMLocation location) {}
+
+public record ATMLocation(String atmId, String branchName, String address, 
+                         BigDecimal cashAvailable) {}
+
+public enum TransactionType { 
+    WITHDRAWAL, BALANCE_INQUIRY, PIN_CHANGE, TRANSFER, DEPOSIT 
+}

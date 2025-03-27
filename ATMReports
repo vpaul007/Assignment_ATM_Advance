@@ -1,0 +1,56 @@
+public class ATMReports {
+    private final List<Transaction> transactions;
+    
+    public ATMReports(List<Transaction> transactions) {
+        this.transactions = transactions;
+    }
+    
+    public Map<String, BigDecimal> getTotalWithdrawalsByATM() {
+        return transactions.stream()
+            .filter(t -> t.type() == TransactionType.WITHDRAWAL)
+            .collect(Collectors.groupingBy(
+                t -> t.location().atmId(),
+                Collectors.reducing(
+                    BigDecimal.ZERO,
+                    Transaction::amount,
+                    BigDecimal::add
+                )
+            ));
+    }
+    
+    public Map<DayOfWeek, Long> getTransactionCountByDayOfWeek() {
+        return transactions.stream()
+            .collect(Collectors.groupingBy(
+                t -> t.timestamp().getDayOfWeek(),
+                Collectors.counting()
+            ));
+    }
+    
+    public Optional<LocalDateTime> getBusiestHour() {
+        return transactions.stream()
+            .collect(Collectors.groupingBy(
+                t -> t.timestamp().truncatedTo(ChronoUnit.HOURS),
+                Collectors.counting()
+            ))
+            .entrySet().stream()
+            .max(Map.Entry.comparingByValue())
+            .map(Map.Entry::getKey);
+    }
+    
+    public Map<AccountType, BigDecimal> getAverageWithdrawalByAccountType(
+            Function<String, Optional<AccountType>> accountTypeResolver) {
+        
+        return transactions.stream()
+            .filter(t -> t.type() == TransactionType.WITHDRAWAL)
+            .collect(Collectors.groupingBy(
+                t -> accountTypeResolver.apply(t.accountNumber()).orElse(AccountType.UNKNOWN),
+                Collectors.collectingAndThen(
+                    Collectors.toList(),
+                    list -> list.stream()
+                        .map(Transaction::amount)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add)
+                        .divide(new BigDecimal(list.size()), RoundingMode.HALF_UP)
+                )
+            ));
+    }
+}

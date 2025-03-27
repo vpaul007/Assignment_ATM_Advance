@@ -1,0 +1,53 @@
+public class ATMInterface {
+    private final ATMService atmService;
+    private final ResourceBundle messages;
+    private final NumberFormat currencyFormat;
+    private final DateTimeFormatter dateFormatter;
+    
+    public ATMInterface(Locale locale, ATMService atmService) {
+        this.messages = ResourceBundle.getBundle("ATMMessages", locale);
+        this.currencyFormat = NumberFormat.getCurrencyInstance(locale);
+        this.dateFormatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
+            .withLocale(locale);
+        this.atmService = atmService;
+    }
+    
+    public void displayWelcome() {
+        System.out.println(messages.getString("welcome"));
+        System.out.println(messages.getString("insertCard"));
+    }
+    
+    public void displayBalance(String cardNumber, String pin, ATMLocation location) {
+        atmService.processOperation(new BalanceInquiry(cardNumber, pin, location, LocalDateTime.now()))
+            .ifPresentOrElse(
+                account -> {
+                    System.out.printf(messages.getString("balanceMessage"),
+                        currencyFormat.format(account.balance()));
+                    displayRecentTransactions(account.accountNumber());
+                },
+                () -> System.out.println(messages.getString("accessDenied"))
+            );
+    }
+    
+    public void displayRecentTransactions(String accountNumber) {
+        System.out.println(messages.getString("recentTransactions"));
+        atmService.getRecentTransactions(accountNumber, 5).forEach(txn -> {
+            System.out.printf("%s: %s - %s%n",
+                txn.timestamp().format(dateFormatter),
+                messages.getString("transaction." + txn.type().name().toLowerCase()),
+                currencyFormat.format(txn.amount()));
+        });
+    }
+    
+    public void processWithdrawal(String cardNumber, String pin, BigDecimal amount, ATMLocation location) {
+        var result = atmService.processOperation(new Withdrawal(cardNumber, pin, amount, location, LocalDateTime.now()));
+        result.ifPresentOrElse(
+            account -> System.out.printf(messages.getString("withdrawalSuccess"),
+                currencyFormat.format(amount),
+                currencyFormat.format(account.balance())),
+            () -> System.out.println(messages.getString("withdrawalFailed"))
+        );
+    }
+    
+    // Other UI methods...
+}

@@ -1,0 +1,21 @@
+public sealed interface ATMOperation permits Withdrawal, BalanceInquiry, PinChange, Transfer, Deposit {
+    String getCardNumber();
+    String getPin();
+    ATMLocation getLocation();
+    LocalDateTime getTimestamp();
+}
+
+public record Withdrawal(String cardNumber, String pin, BigDecimal amount, 
+                        ATMLocation location, LocalDateTime timestamp) implements ATMOperation {}
+
+public record BalanceInquiry(String cardNumber, String pin, 
+                            ATMLocation location, LocalDateTime timestamp) implements ATMOperation {}
+
+public record PinChange(String cardNumber, String oldPin, String newPin, 
+                        ATMLocation location, LocalDateTime timestamp) implements ATMOperation {}
+
+public record Transfer(String cardNumber, String pin, String toAccount, 
+                       BigDecimal amount, ATMLocation location, LocalDateTime timestamp) implements ATMOperation {}
+
+public record Deposit(String cardNumber, String pin, BigDecimal amount, 
+                      ATMLocation location, LocalDateTime timestamp) implements ATMOperation {}

@@ -1,0 +1,32 @@
+public class ATMMain {
+    public static void main(String[] args) throws IOException {
+        // Initialize data
+        Map<String, Card> cards = Map.of(
+            "1234567890123456", new Card("1234567890123456", 
+                hashPin("1234"), "ACC1001", LocalDate.now().plusYears(2), true)
+        );
+        
+        Map<String, Account> accounts = Map.of(
+            "ACC1001", new Account("ACC1001", "CUST001", AccountType.CHECKING, 
+                new BigDecimal("1000"), new BigDecimal("500"))
+        );
+        
+        // Create services
+        ATMService atmService = new ATMService(cards, accounts, new ArrayList<>());
+        ATMLocation location = new ATMLocation("ATM001", "Main Branch", "123 Main St", new BigDecimal("10000"));
+        
+        // Run simulation in different locales
+        System.out.println("=== English ATM ===");
+        new ATMSimulation(Locale.US, atmService, location)
+            .startSession("1234567890123456");
+            
+        System.out.println("\n=== French ATM ===");
+        new ATMSimulation(Locale.FRANCE, atmService, location)
+            .startSession("1234567890123456");
+    }
+    
+    private static String hashPin(String pin) {
+        // In real application, use proper password hashing like BCrypt
+        return Integer.toString(pin.hashCode());
+    }
+}

@@ -1,0 +1,63 @@
+public class ATMAuditLogger {
+    private final Path auditLogPath;
+    private final ExecutorService logExecutor;
+    
+    public ATMAuditLogger(String logDirectory) throws IOException {
+        this.auditLogPath = Paths.get(logDirectory, "atm_audit.log");
+        Files.createDirectories(auditLogPath.getParent());
+        if (!Files.exists(auditLogPath)) {
+            Files.createFile(auditLogPath);
+        }
+        this.logExecutor = Executors.newSingleThreadExecutor();
+    }
+    
+    public void logTransactionAsync(Transaction transaction) {
+        logExecutor.submit(() -> {
+            try {
+                String logEntry = String.format("%s|%s|%s|%s|%s|%s%n",
+                    transaction.timestamp(),
+                    transaction.transactionId(),
+                    transaction.accountNumber(),
+                    transaction.type(),
+                    transaction.amount(),
+                    transaction.location().atmId());
+                
+                Files.write(auditLogPath, logEntry.getBytes(StandardCharsets.UTF_8), 
+                    StandardOpenOption.APPEND);
+            } catch (IOException e) {
+                System.err.println("Failed to write audit log: " + e.getMessage());
+            }
+        });
+    }
+    
+    public List<Transaction> searchTransactions(LocalDate date, String accountNumber) throws IOException {
+        try (Stream<String> lines = Files.lines(auditLogPath)) {
+            return lines
+                .map(line -> line.split("\\|"))
+                .filter(parts -> parts.length == 6)
+                .filter(parts -> accountNumber == null || parts[2].equals(accountNumber))
+                .filter(parts -> date == null || LocalDateTime.parse(parts[0]).toLocalDate().equals(date))
+                .map(parts -> new Transaction(
+                    parts[1],
+                    parts[2],
+                    TransactionType.valueOf(parts[3]),
+                    new BigDecimal(parts[4]),
+                    LocalDateTime.parse(parts[0]),
+                    new ATMLocation(parts[5], "", "", BigDecimal.ZERO)
+                ))
+                .collect(Collectors.toList());
+        }
+    }
+    
+    public void shutdown() {
+        logExecutor.shutdown();
+        try {
+            if (!logExecutor.awaitTermination(30, TimeUnit.SECONDS)) {
+                logExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            logExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+}
